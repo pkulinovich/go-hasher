@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "go-hasher.name" . }}
+  labels:
+  {{- include "go-hasher.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+  {{- include "go-hasher.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+    {{- include "go-hasher.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "go-hasher.serviceAccountName" . }}
+      securityContext:
+      {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ include "go-hasher.imageRepositoryWithTag" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: public-api
+              containerPort: {{ .Values.service.ports.public }}
+          {{- with .Values.containerPorts }}
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.containerLivenessProbe.enabled }}
+          livenessProbe:
+            failureThreshold: {{ .Values.containerLivenessProbe.failureThreshold }}
+            periodSeconds: {{ .Values.containerLivenessProbe.periodSeconds }}
+            httpGet:
+              path: /{{ .Values.appApiPathPrefix }}/health
+              port: {{ .Values.service.ports.public }}
+          {{- end }}
+          env:
+            - name: DB_HOST
+              value: "{{ required ".Values.appEnv.dbHost is required! Make sure to provide it." .Values.appEnv.dbHost }}"
+            - name: DB_PORT
+              value: "{{ required ".Values.appEnv.dbPort is required! Make sure to provide it." .Values.appEnv.dbPort }}"
+            - name: DB_USER
+              value: "{{ required ".Values.appEnv.dbUser is required! Make sure to provide it." .Values.appEnv.dbUser }}"
+            - name: DB_PASS
+              value: "{{ required ".Values.appEnv.dbPass is required! Make sure to provide it." .Values.appEnv.dbPass }}"
+            - name: DB_NAME
+              value: "{{ required ".Values.appEnv.dbName is required! Make sure to provide it." .Values.appEnv.dbName }}"
+            - name: DB_DRIV
+              value: "mysql"
+            - name: PORT
+              value: "{{ required ".Values.service.ports.public is required! Make sure to provide it." .Values.service.ports.public }}"
+          {{- end }}
+          resources:
+      {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+  {{- toYaml . | nindent 8 }}
+  {{- end }}
